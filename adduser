@@ -3,6 +3,14 @@
 # Assignment 4 -sh
 # CMPS 499
 
+#Check that the program is used by grader or self
+whosthis=$(id -un)
+if [[ ("${whosthis}" != 'crs2411') && ("${whosthis}" != 'salival' ) ]]; then
+	echo "You're not authorized to use this program."
+	echo "The authorities have been notified."
+	exit 5
+fi
+
 
 # Change input field separator to preserve whitespace
 OLD_IFS="$IFS"
@@ -11,12 +19,38 @@ echo -n "Enter the name of the roster file: "
 read rosterfile
 #restore the old separator
 IFS="$OLD_IFS"
+# Test if file exists
+if [ ! -s "$rosterfile" ] 
+then
+	echo 'File not found or empty...melting hard disk.'
+	exit 1
+fi
+#make sure file is an ordinary file
+if [ ! -f "$rosterfile" ] 
+then
+	echo 'Error: Choose an orinary file.'
+	exit 4
+fi
+#test if file is readable
+if [ ! -r "$rosterfile" ]
+then
+	echo "$rosterfile couldn't be read. Check permissions"
+	exit 2
+fi
+
 echo -n "Enter the course name: "
 read coursename
 echo -n "Enter the course's section number: "
 read section
-#initial variables for groups and users
+# test if numerical
+if echo -n $section | grep -q '^[0-9]+$'; then
+	echo "Input error. Section must be a number."
+	exit 3
+fi
+
+#initialize variables for groups and users
 userId=1000  groupId=1000
+
 #get the last letter of the section and append it to coursename
 coursename="$coursename$(echo $section | tail -c 2)"
 loginsh="/bin/sh"
@@ -36,32 +70,30 @@ while read clid lastname firstname middleinit
 exec 1<&-
 #Restore stdinput
 exec 1<&5
-umask 027
+
 mkdir $coursename
-chgrp 1000 $coursename
-umask 077
 # Read uid and path from password file and create home directories
-awk -F : '{print $3, $6}' password | while read uid path
+OLD_IFS="$IFS"
+IFS=":"
+ while read clid pass uid gid name homepath shelldir
 	do
-	mkdir -p ${path}
+	mkdir -p ${homepath}
 # Create .profile files with the content following	
-tee $path/.profile << 123profilecontent321 > /dev/null
-if [ "$TERM" = "" ]
-then
-        if /bin/i386
-        then
-                TERM=sun-color
-        else
-                TERM=xterm
-        fi
-        export TERM
-fi
+	tee $homepath/.profile << 123profilecontent321 > /dev/null
+	if [ "$TERM" = "" ]
+	then
+        	if /bin/i386
+        	then
+        		TERM=sun-color
+        	else
+			TERM=xterm
+       		fi
+       		export TERM
+	fi
 123profilecontent321
-	# Set ownership to the appropriate users and permissions
-	chown -R $uid:1000 $path
-	chmod u+x $path/.profile
-	done
+	done < password
 #cleanup - Restore things to normal
+#IFS="$OLD_IFS"
 exec 1<&5 5<&-
 exec 0<&6 6<&-
 trap SIGHUP SIGINT SIGQUIT SIGTERM SIGSTOP SIGTSTP
